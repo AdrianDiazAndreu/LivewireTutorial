@@ -4,121 +4,123 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use App\Models\Task;
-use App\Models\User; 
+use App\Models\User;
 
 class TaskComponent extends Component
 {
     public $tasks = [];
+
+    
     public $title;
     public $description;
-    public $createModal = false;
-    public $updateModal = false;
-    public $currentTask;
+    public $modal = false;
+    public $edit = false;
+    public $modalInfo = [];
+    public $currentTaskId;
+    public $errors ;
+    public $valid = false;
+    public $auxDelete = false;
 
     public function mount()
     {
         $this->tasks = $this->getTasks();
     }
-
     public function render()
     {
         return view('livewire.task-component');
     }
-
     public function getTasks()
     {
         return $this->tasks = Task::where('user_id', auth()->id())->get();
     }
 
+    /// MODAL ADMIN ///////////
+    public function openModal(Int $id)
+    {
+        if($id == 0)
+        {
+            $this->modal = true;
+        }else{
+            $this->currentTaskId = $id;
+            $this->fillForm();
+        }
+    }
+    public function closeModal()
+    {
+        $this->modal = false;
+        $this->clearFields();
+    }
     public function clearFields()
     {
         $this->title = '';
         $this->description = '';
-        $this->reset(['title', 'description', 'updateModal']);
+        $this->errors = '';
+        $this->currentTaskId = '';
+        $this->edit = false;
     }
-
-    public function openCreateModal()
+    /// VALIDATE FIELDS ///////////////
+    public function validateFields()
     {
-        $this->createModal = true;
-        $this->clearFields();
-    }
 
-    public function openUpdateModal(Task $task)
-    {
-        $this->clearFields();
-        $this->fillForm($task);
-        $this->currentTask = $task;
-        $this->updateModal = true;
+        if (!empty($this->title)) {
+            $this->valid = true;
+        } else {
+            $this->errors = '*Title or description are missing';
+        }
+        if ($this->valid==true){
+            $this->storeTask();
+        }
     }
-
-    public function closeCreateModal()
-    {
-        $this->createModal = false;
-    }
-
-    public function closeUpdateModal()
-    {
-        // $this->clearFields();
-        $this->updateModal = false;
-    }
-
-    public function createTask()
+    /// STORE TASKS ///////////
+    
+    public function storeTask()
     {
         $newTask = new Task();
-        $newTask->title = $this->title; 
+        $newTask->title = $this->title;
         $newTask->description = $this->description;
         $newTask->user_id = auth()->id();
         $newTask->save();
+        $this->clearFields();
         $this->getTasks();
-        $this->closeCreateModal();
+        $this->closeModal();
+    }
+    /// UPDATE TASKS ///////////
+    public function fillForm()
+    {
+        $task = Task::find($this->currentTaskId);
+        $this->title = $task->title;
+        $this->description = $task->description;
+        $this->edit = true;
+        $this->modal = true;
     }
     public function updateTask()
     {
-        $task = Task::find($this->currentTask->id);
+        $task = Task::find($this->currentTaskId);
         $task->title = $this->title;
         $task->description = $this->description;
         $task->save();
+        $this->clearFields();
         $this->getTasks();
-        $this->closeUpdateModal();
+        $this->closeModal();
+    }
+    /// DELETE TASKS ///////////
+    public function confirmDelete(Int $id)
+    {
+        $this->auxDelete = true;
+        // dd($this->auxDelete);
+        $this->currentTaskId = $id;
     }
 
-    // public function createorUpdateTask(Task $task)
-    // {
-    //     if($task)
-    //     {
-    //         $task->title = $this->title;
-    //         $task->description = $this->description;
-    //         $task->user_id = auth()->id();
-    //         $task->save();
-    //     }else
-    //     {
-    //         Task::updateOrCreate(["id" => $this->id],
-
-    //         [
-    //             "title" => $this->title, 
-    //             "description" => $this->description, 
-    //             "user_id" => auth()->user()->id()
-            
-    //         ]);
-            
-    //     }
-    //     $this->clearFields();
-    //     $this->modal = false;
-    //     $this->tasks = $this->getTasks()->sortByDesc('id');
-    // }
-
-
-    public function deleteTask(Task $task)
+    public function deleteTask()
     {
+
+        $task = Task::find($this->currentTaskId);
         $task->delete();
-        $this->getTasks()->sortByDesc('id');
+        $this->getTasks();
+        $this->auxDelete = false;
+        $this->clearFields();
     }
-        
+    
 
-    public function fillForm(Task $task)
-    {
-        $this->title = $task->title;
-        $this->description = $task->description;
-    }
 
 }
