@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use Illuminate\Container\Attributes\Auth;
 use Livewire\Component;
 use App\Models\Task;
 use App\Models\User;
@@ -9,7 +10,7 @@ use App\Models\User;
 class TaskComponent extends Component
 {
     public $tasks = [];
-
+    public $data = '<script>Swal.fire({title: "¡Éxito!", text: "{{$sessionMessage}}", icon:"success", confirmButtonText: "Aceptar" });</script>';
     
     public $title;
     public $description;
@@ -20,9 +21,19 @@ class TaskComponent extends Component
     public $errors ;
     public $valid = false;
     public $auxDelete = false;
+    public $shareModal = false;
+    public $users;
+    public $selectedUser;
+    public $selectedPermission ;
+    public $sessionMessage = '';
+    public function getUsersButnotMe()
+    {
+        return User::all()->except(auth()->id());
+    }
 
     public function mount()
     {
+        $this->users = $this->getUsersButnotMe();
         $this->tasks = $this->getTasks();
     }
     public function render()
@@ -31,7 +42,12 @@ class TaskComponent extends Component
     }
     public function getTasks()
     {
-        return $this->tasks = Task::where('user_id', auth()->id())->get();
+        $user = auth()->user();
+        $misTareas =  Task::where('user_id', auth()->id())->get();
+        $tareasCompartidas = $user->sharedTasks()->get();
+        $this->tasks = $misTareas->merge($tareasCompartidas);
+
+        return $misTareas->merge($tareasCompartidas);
     }
 
     /// MODAL ADMIN ///////////
@@ -44,11 +60,15 @@ class TaskComponent extends Component
             $this->currentTaskId = $id;
             $this->fillForm();
         }
+        $this->getTasks();
+
     }
     public function closeModal()
     {
         $this->modal = false;
         $this->clearFields();
+        $this->getTasks();
+
     }
     public function clearFields()
     {
@@ -81,8 +101,10 @@ class TaskComponent extends Component
         $newTask->user_id = auth()->id();
         $newTask->save();
         $this->clearFields();
-        $this->getTasks();
         $this->closeModal();
+        // AQUI DEBERIA ESTAR EL MENSAJE DE SESION
+        
+        $this->getTasks();  
     }
     /// UPDATE TASKS ///////////
     public function fillForm()
@@ -92,6 +114,7 @@ class TaskComponent extends Component
         $this->description = $task->description;
         $this->edit = true;
         $this->modal = true;
+
     }
     public function updateTask()
     {
@@ -107,8 +130,16 @@ class TaskComponent extends Component
     public function confirmDelete(Int $id)
     {
         $this->auxDelete = true;
-        // dd($this->auxDelete);
         $this->currentTaskId = $id;
+        $this->getTasks();
+    }
+
+    public function cancelDelete()
+    {
+        $this->auxDelete = false;
+        $this->currentTaskId = null;
+        $this->getTasks();
+
     }
 
     public function deleteTask()
@@ -119,6 +150,35 @@ class TaskComponent extends Component
         $this->getTasks();
         $this->auxDelete = false;
         $this->clearFields();
+    }
+
+    /// COMPARTIR TAREAS ////////
+
+    public function openShareModal(Int $id)
+    {
+        $this->currentTaskId = $id;
+        $this->shareModal = true;
+        $this->getTasks();
+
+    }
+
+    public function closeShareModal()
+    {
+        $this->shareModal = false;
+        $this->selectedUser = '';
+        $this->selectedPermission = '';
+        $this->currentTaskId = null;
+        $this->getTasks();
+
+    }
+    public function shareTask()
+    {
+        
+        $task = Task::find($this->currentTaskId);
+        $usertoshare = User::find($this->selectedUser);
+        $usertoshare->sharedTasks()->attach($task->id, ['permission' => $this->selectedPermission]);
+        $this->closeShareModal();
+        session()->flash('message', 'Se ha compartido la tarea con éxito');
     }
     
 
